@@ -161,7 +161,7 @@ class TestNotesEditDelete(TestCase):
 
 class TestModelSlug(TestCase):
     """
-    Класс для проверки ограничений символов и на автоматическое 
+    Класс для проверки ограничений символов и на автоматическое
     формирование slug из содержимого поля title.
     """
     TITLE_COUNT = 100
