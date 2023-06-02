@@ -1,11 +1,13 @@
+from http import HTTPStatus
+
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.urls import reverse
 
+from pytils.translit import slugify
+
 from notes.forms import WARNING
 from notes.models import Note
-
-from http import HTTPStatus
 
 User = get_user_model()
 
@@ -14,6 +16,8 @@ class TestNotesCreation(TestCase):
     """Класс для проверки отправки заметки"""
     NOTES_TEXT = 'Текст заметки'
     NOTES_TITLE = 'Заголовок заметки'
+    NOTES_SLUG = 'zagolovok-zametki'
+    EMPTY_LIST_COUNT = 0
 
     @classmethod
     def setUpTestData(cls):
@@ -39,16 +43,14 @@ class TestNotesCreation(TestCase):
         response = self.author_client.post(self.url_add, data=self.form_data)
         self.assertRedirects(response, self.url_done)
         self.assertEqual(Note.objects.count(), init_count + 1)
-
-    def test_user_can_create_note(self):
-        """Проверка корректности полей."""
-        note_dict_object = {
-            Note.objects.get().text: self.note.text,
-            Note.objects.get().title: self.note.title,
-            Note.objects.get().slug: self.note.slug,
-            Note.objects.get().author: self.note.author,
+        note = Note.objects.get(id=2)
+        note_dict_objects = {
+            note.text: self.NOTES_TEXT,
+            note.title: self.NOTES_TITLE,
+            note.slug: self.NOTES_SLUG,
+            note.author: self.note.author,
         }
-        for note_field, init_note_field in note_dict_object.items():
+        for note_field, init_note_field in note_dict_objects.items():
             with self.subTest(
                 note_field=note_field,
                 init_note_field=init_note_field,
@@ -63,12 +65,21 @@ class TestNotesCreation(TestCase):
         redirect_url = f'{login_url}?next={self.url_add}'
         self.assertRedirects(response, redirect_url)
         self.assertEqual(Note.objects.count(), init_count)
+        self.assertEqual(
+            Note.objects.filter(**self.form_data).count(),
+            self.EMPTY_LIST_COUNT,
+        )
 
     def test_not_unique_slug(self):
         """Проверка на невозможность создать две заметки с одинаковым slug."""
         init_count = Note.objects.count()
-        slug_data = {'slug': self.note.slug}
-        response = self.author_client.post(self.url_add, data=slug_data)
+        new_data = {
+            'text': self.NOTES_TEXT,
+            'title': self.NOTES_TITLE,
+            'slug': self.note.slug,
+            'author': self.author,
+        }
+        response = self.author_client.post(self.url_add, data=new_data)
         self.assertFormError(
             response,
             form='form',
@@ -76,6 +87,19 @@ class TestNotesCreation(TestCase):
             errors=(self.note.slug + WARNING)
         )
         self.assertEqual(Note.objects.count(), init_count)
+        note = Note.objects.get()
+        note_dict_objects = {
+            note.text: self.note.text,
+            note.title: self.note.title,
+            note.slug: self.note.slug,
+            note.author: self.note.author,
+        }
+        for note_field, init_note_field in note_dict_objects.items():
+            with self.subTest(
+                note_field=note_field,
+                init_note_field=init_note_field,
+            ):
+                self.assertEqual(note_field, init_note_field)
 
 
 class TestNotesEditDelete(TestCase):
@@ -165,7 +189,6 @@ class TestModelSlug(TestCase):
     формирование slug из содержимого поля title.
     """
     TITLE_COUNT = 100
-    SLUG_COUNT = 50
 
     @classmethod
     def setUpTestData(cls):
@@ -175,13 +198,25 @@ class TestModelSlug(TestCase):
             text='Тестовый текст',
             author=cls.author,
         )
+        cls.author_client = Client()
+        cls.author_client.force_login(cls.author)
 
     def test_text_convert_to_slug(self):
         """
         Проверка slug на ограничение символов и на автоматическое
         формирование slug из содержимого поля title.
         """
-        self.assertEqual(self.note.slug, 'zh' * self.SLUG_COUNT)
+        data = {
+            'title': 'душнила',
+            'text': self.note.text,
+            'author': self.note.author,
+        }
+        self.author_client.post(reverse('notes:add'), data=data)
+        note = Note.objects.get(title='душнила')
+        self.assertEqual(
+            note.slug,
+            slugify(note.title)[:self.TITLE_COUNT],
+        )
 
     def test_text_slug_max_length_not_exceed(self):
         """Проверка длинны slug(не более 100 символов)."""

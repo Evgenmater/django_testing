@@ -8,7 +8,7 @@ from django.urls import reverse
 def test_news_count(client, news_page_and_sorting_by_data):
     """Проверка количество постов на главное странице. """
     response = client.get(reverse('news:home'))
-    object_list = response.context['object_list']
+    object_list = response.context.get('object_list')
     news_count = len(object_list)
     assert news_count, settings.NEWS_COUNT_ON_HOME_PAGE
 
@@ -19,10 +19,10 @@ def test_news_order(client, news_page_and_sorting_by_data):
     Проверка сортировки от свежей к старой новости на главное странице.
     """
     response = client.get(reverse('news:home'))
-    object_list = response.context['object_list']
-    first_news_date = object_list[0].date
+    object_list = response.context.get('object_list')
     all_dates = [news.date for news in object_list]
-    assert first_news_date, max(all_dates)
+    for i in range(len(all_dates) - 1):
+        assert all_dates[i] >= all_dates[i + 1]
 
 
 @pytest.mark.django_db
@@ -33,7 +33,8 @@ def test_comments_order(client, sorting_comments_by_data, news_id_for_args):
     assert 'news' in response.context
     news = response.context['news']
     all_comments = news.comment_set.all()
-    assert all_comments[0].created, all_comments[1].created
+    for i in range(len(all_comments) - 1):
+        assert all_comments[i].created <= all_comments[i + 1].created
 
 
 def test_authorized_client_has_form(author_client, news):

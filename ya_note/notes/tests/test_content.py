@@ -3,6 +3,7 @@ from django.urls import reverse
 from django.contrib.auth import get_user_model
 
 from notes.models import Note
+from notes.forms import NoteForm
 
 User = get_user_model()
 
@@ -33,24 +34,28 @@ class TestDetailNotes(TestCase):
             ('notes:add', None),
         )
         self.client.force_login(self.author)
-        for name, args in (urls):
+        for name, args in urls:
             with self.subTest(name=name):
-                if args is not None:
-                    url = reverse(name, args=(self.note.slug,))
-                else:
-                    url = reverse(name)
-            response = self.client.get(url)
-            self.assertIn('form', response.context)
+                url = reverse(name, args=args)
+                response = self.client.get(url)
+                self.assertIn('form', response.context)
+                self.assertIsInstance(response.context['form'], NoteForm)
 
-    def test_notes_list_for_different_users(self):
+    def test_notes_list_for_current_user(self):
         """
-        Проверка заметки, которая передаётся на страницу со списком заметок
-         и чтобы заметки пользователя не попадали к другому пользователю.
+        Проверка заметки, которая передаётся на страницу со списком заметок.
         """
         url = reverse('notes:list')
         response = self.author_client.get(url)
-        response_another_user = self.another_user_client.get(url)
-        object_list = response.context['object_list']
-        object_list_another_user = response_another_user.context['object_list']
+        object_list = response.context.get('object_list')
         self.assertIn(self.note, object_list)
+
+    def test_notes_list_user(self):
+        """
+        Проверка, чтобы заметки пользователя не попадали к другому
+        пользователю.
+        """
+        url = reverse('notes:list')
+        response_another_user = self.another_user_client.get(url)
+        object_list_another_user = response_another_user.context['object_list']
         self.assertNotIn(self.note, object_list_another_user)
